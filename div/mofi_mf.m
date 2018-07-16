@@ -1,10 +1,9 @@
-function [samples_mf] = mofi_mf (samples, kernel, enable_hilbert, shape)
-
+function samples_mf = mofi_mf (samples, kernel, enable_hilbert, shape)
 %
 % SAMPLES_MF = MOFI_MF(samples, kernel [,enable_hilbert = 1, shape = 'same'])
 %
 % The input samples are converted to double, the DC-offset is removed from each channel, and then 
-% the matched-filtering is carried out.
+% the matched-filtering and possibly the hilbert transform are carried out.
 %
 % Before filtering the kernel function is normalized to have unit area.
 %
@@ -59,5 +58,4 @@ if strcmp(shape,'same')
     cut_idx = floor(length(kernel)/2);
     samples_mf = samples_mf(1+cut_idx:end-cut_idx,:); %remove extra samples from convolution
 end    
-
 

@@ -1,0 +1,88 @@
+% This file gives an example of how to use the mofi_video*
+% functions.
+% By MOFI
+% V. 1.0, tor 02 maj 2013 00:07:26 CEST, Init version.
+% V. 1.1, tor 09 maj 2013 16:43:38 CEST, The font-size + author is now set.
+% V. 1.2  tir 04 feb 2014 18:52:31 CEST, Now grabs axis handle itself (instead of
+%                                        CFUvideo) and explains how to plot in
+%                                        invisible figures.
+
+
+
+
+% Make a new, but invisible figure.
+hf = figure('visible','off');
+% Get the current axis handle. This way we can plot without showing the figure. This speeds up
+% the grabbing. (The figure is not shown if 'visible' == 'off');
+hax = gca; %axis handle
+
+% Choose a font size
+fontsize = 25;
+
+
+%% Setup mofi_video
+% Only 'video_name' is mandatory to set. See the help file for
+% default values.
+video_name     = 'double_circle2';
+video_settings = mofi_video_init(video_name, ...
+                                'frame_rate', 20.53, ...
+                                'hf',hf,...
+                                'folder','video_test_mpeg4',...
+                                'visible', 'off', ...
+                                'author', 'Morten Fischer Rasmussen', ...
+                                'resolution', [1280 960], ...
+                                'encoding', 'MPEG4', 'loglevel', 2);
+
+%% Setup plot
+circle1_radius = 3;
+circle2_radius = 1;
+
+t1 = (0:0.05:2*pi)';
+t2 = (0:0.25:10*pi)';
+
+circle1 = [cos(t1) sin(t1)]*circle1_radius;
+circle2 = [cos(t2) sin(t2)]*circle2_radius;
+
+wobble = circle1 + circle2;
+
+
+%% Plot + grab frame
+for idx = 1:length(t1)
+    % setup plot coordinates
+    pt_x   = wobble(idx,1);
+    pt_y   = wobble(idx,2);
+    line_x = wobble(1:idx,1);
+    line_y = wobble(1:idx,2);
+    
+    % Plot to the invisible figure 
+    % Note: the axis handle, not the figure handle, is used when plotting.
+    % If you have several axes within your figure, e.g., when using subplot, 
+    % you must keep track of this your self .
+    hp1 = plot(hax, line_x,line_y, 'k-', 'linewidth',2);
+    hold on
+    hp2 = plot(hax, pt_x,pt_y, 'r.', 'MarkerSize',20 );
+    axis image
+    axis tight
+    xlim([-4.1 4.1])
+    ylim([-4.1 4.1])
+    xlabel('x [mm]')
+    ylabel('y [mm]')
+    mofi_figure_set_font('font_size', fontsize)
+    grid on;
+    box on;
+    drawnow;
+    
+    mofi_video_grab_frame(video_settings);
+    % Delete the plot without deleting the axes (don't use clf!)
+    delete(hp1)
+    delete(hp2)
+end
+
+
+
+
+%% encode video
+% Delete the temporary images from the output folder
+delete_tmp_images = 1;
+mofi_video_encode(video_settings, delete_tmp_images);
+
