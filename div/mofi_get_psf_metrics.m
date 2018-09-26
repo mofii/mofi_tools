@@ -24,8 +24,8 @@ function st = mofi_get_psf_metrics(varargin)
 %
 % Code By Morten F. Rasmussen and Jens Munk Hansen in 2010-2011.
 % 07/11/14 Changed default interpolation to cubic - tdi 
-% 20/06/17 Added Binary resolution and fixed a minor bug when axes direction is inverted.
-
+% 20/06/17 Added Binary resolution and fixed a minor bug when axes direction is inverted. Mofi
+% 25/09/18 Fixed bug in binary resolution + minor code clean-up. Mofi.
 
 % Defaults
 opt.mode              = 'box';%circle'; % Check for this
@@ -64,9 +64,9 @@ if opt.binary_resolution,
     varargin(idx) = [];
     % recursive call without the binary flag
     args = {'ctr',true,varargin{:}};
-    st = mofi_get_psf_metrics(args{:})
+    st = mofi_get_psf_metrics(args{:});
     % Return the binary resolution
-    st.binary_resolution = max(st.fwhm_max, st.radius6dB);
+    st.binary_resolution = max(st.fwhm_max, 2*st.radius6dB);
     return
 end
 
@@ -239,10 +239,10 @@ end
 
 % get chosen area (ROI) 
 area = cdata(roi_y_min_idx:roi_y_max_idx , roi_x_min_idx:roi_x_max_idx);
-sa   = size(area)
-scd  = size(cdata)
-sroix = size((roi_x_min_idx:roi_x_max_idx))
-sroiy = size((roi_y_min_idx:roi_y_max_idx))
+sa   = size(area);
+scd  = size(cdata);
+sroix = size((roi_x_min_idx:roi_x_max_idx));
+sroiy = size((roi_y_min_idx:roi_y_max_idx));
 
 % Get FWHM
 if opt.log
@@ -313,7 +313,7 @@ cst.total_energy = cst.total_energy * nover_x * nover_y;
 %cst.max_radius = min(rect(3),rect(4))/2;
 cst.max_radius = max(rect(3),rect(4))/2;
 
-cst.cdata = imresize(cdata,[nover_y*ny nover_x*nx]);
+cst.cdata = imresize(cdata,[nover_y*ny, nover_x*nx]);
 
 if opt.log
     % revert to linear scale
@@ -340,7 +340,8 @@ cst.ctr_limit = opt.ctr_limit;
 
 % TODO: Less oversampling  
 if (opt.ctr)
-    st.radius = (1:100)/100*cst.max_radius;
+    num_radius = 100;
+    st.radius  = (1:num_radius)/num_radius*cst.max_radius;
     
     % TEST: Works with powers
     mask = imresize(mask,[nover_y*ny nover_x*nx]);
@@ -354,11 +355,11 @@ if (opt.ctr)
     c2 = (cst.js - cst.jmax).^2;
     c3 = cst.max_radius*cst.nx/cst.xrange;
     c4 = cst.max_radius*cst.ny/cst.yrange;
-    for i=1:100
+    for i=1:num_radius
         if opt.debug, fprintf('%i ', i); end
-        beta = i/100;
-        imask = (c1)/ (beta*c3)^2 + (c2)/ (beta*c4)^2 < 1;
-        erg_roi =  sum(cst.cdata(imask(:)));
+        beta     = i/num_radius;
+        imask    = (c1)/ (beta*c3)^2 + (c2)/ (beta*c4)^2 < 1;
+        erg_roi  = sum(cst.cdata(imask(:)));
         st.ct(i) = 10*log10(1-abs(erg_roi/cst.total_energy));
     end
     if opt.debug, fprintf('\n'); end
@@ -422,7 +423,7 @@ if (opt.ctr)
 
     %extrapval = max(st.radius);
     error_val = Inf;
-    cystic_res = interp1(ct, radius,  [-6 -12 -20 -40], opt.interp, error_val);
+    cystic_res = interp1(ct, radius,  [-6.0206 -12 -20 -40], opt.interp, error_val);
     if(sum(cystic_res < 0) > 0)
         keyboard
     end
@@ -434,6 +435,7 @@ end
 
 
 if (opt.clutter)
+    num_angle = 100; % number of angular sampling directions
     bla = imresize(cdata,[nover_y*ny nover_x*nx]);
     %xs = linspace(xdata(1),xdata(end),nx*opt.nover);
     xs = linspace(xdata(1),xdata(end),nx*nover_x);
@@ -441,10 +443,10 @@ if (opt.clutter)
     %ys = linspace(ydata(1),ydata(2),ny*opt.nover);
     ys = linspace(ydata(1),ydata(2),ny*nover_y);
     ys = ndgrid(ys,bla(1,:));
-    thetas = 2*pi*(0:100-1)/100;
-    for i=1:100
-        xi = (i-1)/100*cst.max_radius*cos(thetas)+st.x_coord;
-        yi = (i-1)/100*cst.max_radius*sin(thetas)+st.y_coord;
+    thetas = 2*pi*(0:num_angle-1)/num_angle;
+    for i=1:num_angle
+        xi = (i-1)/num_angle*cst.max_radius*cos(thetas)+st.x_coord;
+        yi = (i-1)/num_angle*cst.max_radius*sin(thetas)+st.y_coord;
         st.clutter(i) = mean(interp2(xs,ys,bla,xi,yi)) - st.max;
     end
 end
@@ -523,7 +525,7 @@ area = area - max(area(:));
 % get pixel coordinate of maximum in the C-Scan
 [y0_i,x0_i] = find(area==0);
 if length(x0_i) > 1
-    [y0_i,x0_i] = find(area>-6);
+    [y0_i,x0_i] = find(area>-6.0206);
     x(1,:) =y0_i; % y-coord
     x(2,:) =x0_i; % x-coord
 
@@ -578,7 +580,9 @@ method = 'linear';
 S = interp2(area, S_x, S_y, method, extrapval);
 
 % We want to search from the out side towards the center
-S= fliplr(S);
+S    = fliplr(S);
+db6  = zeros(ang_step,1);
+db20 = zeros(ang_step,1);
 if (dbg_on)
     x_axis2 = dist(end:-1:1)*dx;
     y_axis2 = ang(end-4:-1:1)*180/pi;
@@ -587,31 +591,28 @@ if (dbg_on)
     hold on;
 end
 
-db6  = zeros(ang_step,1);
-db20 = zeros(ang_step,1);
 
-
-for line=1:size(S_x,1),
+for line_idx=1:size(S_x,1),
     % Find first index where value is higher than -6dB
-    thr = -6;
-    db6_tmp = find((S(line,:)>=thr), 1, 'first');
-    % make sure there there also was a value lower than 6dB
-    if (isempty(find((S(line,:)<=thr), 1, 'first')) || isempty(db6_tmp))
+    thr = -6.0206;
+    db6_tmp = find((S(line_idx,:)>=thr), 1, 'first');
+    % make sure there is also a value lower than 6dB
+    if (isempty(find((S(line_idx,:)<=thr), 1, 'first')) || isempty(db6_tmp))
         % result cannot be used.
         db6_tmp=Inf;
     end
-    db6(line) = db6_tmp;
+    db6(line_idx) = db6_tmp;
     
     
     thr = -20;
     % Find first index where value is higher than -20dB
-    db20_tmp = find((S(line,:)>=thr), 1, 'first');
-    % make sure there there also was a value lower than 20dB
-    if (isempty(find((S(line,:)<=thr), 1, 'first')) || isempty(db20_tmp))
+    db20_tmp = find((S(line_idx,:)>=thr), 1, 'first');
+    % make sure there is also value lower than 20dB
+    if (isempty(find((S(line_idx,:)<=thr), 1, 'first')) || isempty(db20_tmp))
         % result cannot be used.
         db20_tmp=Inf;
     end
-    db20(line) = db20_tmp;
+    db20(line_idx) = db20_tmp;
 
 end
 
